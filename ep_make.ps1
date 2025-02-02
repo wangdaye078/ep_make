@@ -376,6 +376,7 @@ cd ..
 $Host.UI.RawUI.WindowTitle += ": ok"
 Start-Sleep -Seconds 1
 
+#can not remove, can not add in front
 $env:DisableRegistryUse="true"
 $Host.UI.RawUI.WindowTitle = "ep_make: Restoring NuGet packages"
 cd repo
@@ -397,10 +398,18 @@ Start-Sleep -Seconds 1
 
 $Host.UI.RawUI.WindowTitle = "ep_make: Building ExplorerPatcher for x64"
 cd repo
-msbuild ExplorerPatcher.sln /property:Configuration=Release /property:Platform=amd64 /target:"clean;Build"
+md $env:AppData\ExplorerPatcher\ep_make\repo\build\Release\x64 -ErrorAction SilentlyContinue
 echo "copy ep_taskbar.?.dll to folder $env:AppData\ExplorerPatcher\ep_make\repo\build\Release\x64"
 pause
-msbuild ExplorerPatcher.sln /property:Configuration=Release /property:Platform=amd64 /target:"Build"
+
+$content = Get-Content -Path ".\ep_setup\ep_setup.vcxproj" -Raw
+if ($content -match "((?s) *<ItemGroup>\r\n *<PackFile.*?</ItemGroup>)") { 
+  $content = $content.replace($matches[0], "")
+  $content = $content.replace("<MakeDir", $matches[0] + [Environment]::NewLine + "    <MakeDir")
+  Set-Content -Path ".\ep_setup\ep_setup.vcxproj" -Value $content
+}
+
+msbuild ExplorerPatcher.sln /property:Configuration=Release /property:Platform=amd64 /target:"clean;Build"
 cd ..
 $Host.UI.RawUI.WindowTitle += ": ok"
 Start-Sleep -Seconds 1
