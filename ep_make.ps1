@@ -280,15 +280,19 @@ $Host.UI.RawUI.WindowTitle = "ep_make: Patching portable-msvc"
 $Host.UI.RawUI.WindowTitle += ": ok"
 Start-Sleep -Seconds 1
 
-$Host.UI.RawUI.WindowTitle = "ep_make: Acquiring Build Tools for x86 using portable-msvc"
-.\python\python.exe .\portable-msvc\portable-msvc.py --accept-license --target x86 --sdk-version $EP_WinSDK_Short
-$Host.UI.RawUI.WindowTitle += ": ok"
-Start-Sleep -Seconds 1
+if (-not (Test-Path $env:AppData\ExplorerPatcher\ep_make\msvc\VC\Tools\MSVC\*\bin\Hostx64\x86)) {
+	$Host.UI.RawUI.WindowTitle = "ep_make: Acquiring Build Tools for x86 using portable-msvc"
+	.\python\python.exe .\portable-msvc\portable-msvc.py --accept-license --target x86 --sdk-version $EP_WinSDK_Short
+	$Host.UI.RawUI.WindowTitle += ": ok"
+	Start-Sleep -Seconds 1
+}
 
-$Host.UI.RawUI.WindowTitle = "ep_make: Acquiring Build Tools for x64 using portable-msvc"
-.\python\python.exe .\portable-msvc\portable-msvc.py --accept-license --target x64 --sdk-version $EP_WinSDK_Short
-$Host.UI.RawUI.WindowTitle += ": ok"
-Start-Sleep -Seconds 1
+if (-not (Test-Path $env:AppData\ExplorerPatcher\ep_make\msvc\VC\Tools\MSVC\*\bin\Hostx64\x64)) {
+	$Host.UI.RawUI.WindowTitle = "ep_make: Acquiring Build Tools for x64 using portable-msvc"
+	.\python\python.exe .\portable-msvc\portable-msvc.py --accept-license --target x64 --sdk-version $EP_WinSDK_Short
+	$Host.UI.RawUI.WindowTitle += ": ok"
+	Start-Sleep -Seconds 1
+}
 
 $Host.UI.RawUI.WindowTitle = "ep_make: Acquiring ExplorerPatcher"
 .\git\bin\git.exe clone --recursive $url_explorerpatcher repo
@@ -324,7 +328,6 @@ Start-Sleep -Seconds 1
 $Host.UI.RawUI.WindowTitle = "ep_make: Preparing build environment"
 $env:Platform="x64"
 $env:EnterpriseWDK="True"
-$env:DisableRegistryUse="true"
 $env:VisualStudioVersion="17.0"
 $env:VSINSTALLDIR="$env:AppData\ExplorerPatcher\ep_make\msvc\"
 $env:VCToolsVersion=(Get-Content $env:AppData\ExplorerPatcher\ep_make\msvc\VC\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt -Raw).Trim()
@@ -344,8 +347,8 @@ $Host.UI.RawUI.WindowTitle = "ep_make: Building funchook"
 cd repo
 cd libs
 cd funchook
-md build -ErrorAction SilentlyContinue
-cd build
+md build-$env:Platform -ErrorAction SilentlyContinue
+cd build-$env:Platform
 ..\..\..\..\cmake\bin\cmake.exe -G "Visual Studio 17 2022" -A x64 ..
 (gc .\funchook-static.vcxproj) -replace '<RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>', '<RuntimeLibrary>MultiThreaded</RuntimeLibrary>' | Out-File .\funchook-static.vcxproj
 ..\..\..\..\cmake\bin\cmake.exe --build . --config Release
@@ -356,6 +359,24 @@ cd ..
 $Host.UI.RawUI.WindowTitle += ": ok"
 Start-Sleep -Seconds 1
 
+
+$Host.UI.RawUI.WindowTitle = "ep_make: Building zlib"
+cd repo
+cd libs
+cd zlib
+md build-$env:Platform -ErrorAction SilentlyContinue
+cd build-$env:Platform
+..\..\..\..\cmake\bin\cmake.exe -G "Visual Studio 17 2022" -A x64 ..
+(gc .\zlibstatic.vcxproj) -replace '<RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>', '<RuntimeLibrary>MultiThreaded</RuntimeLibrary>' | Out-File .\zlibstatic.vcxproj
+..\..\..\..\cmake\bin\cmake.exe --build . --config Release
+cd ..
+cd ..
+cd ..
+cd ..
+$Host.UI.RawUI.WindowTitle += ": ok"
+Start-Sleep -Seconds 1
+
+$env:DisableRegistryUse="true"
 $Host.UI.RawUI.WindowTitle = "ep_make: Restoring NuGet packages"
 cd repo
 ..\nuget\nuget.exe restore ExplorerPatcher.sln
@@ -377,11 +398,14 @@ Start-Sleep -Seconds 1
 $Host.UI.RawUI.WindowTitle = "ep_make: Building ExplorerPatcher for x64"
 cd repo
 msbuild ExplorerPatcher.sln /property:Configuration=Release /property:Platform=amd64 /target:"clean;Build"
+echo "copy ep_taskbar.?.dll to folder $env:AppData\ExplorerPatcher\ep_make\repo\build\Release\x64"
+pause
+msbuild ExplorerPatcher.sln /property:Configuration=Release /property:Platform=amd64 /target:"Build"
 cd ..
 $Host.UI.RawUI.WindowTitle += ": ok"
 Start-Sleep -Seconds 1
 
-if (Test-Path .\repo\build\Release\ep_setup.exe) {
+if (Test-Path .\repo\build\Release\x64\ep_setup.exe) {
 	$Host.UI.RawUI.WindowTitle = "ep_make: Finalizing build"
 	if (-not (Test-Path $regKey)) {
 		New-Item -Path $regKey -Force -ErrorAction SilentlyContinue
@@ -390,11 +414,13 @@ if (Test-Path .\repo\build\Release\ep_setup.exe) {
 	cd repo
 	cd build
 	cd Release
+	cd x64
 	.\ep_setup_patch.exe $EP_hashToUse
 	$process = Get-Process -Name "ep_setup_patch" -ErrorAction SilentlyContinue
 	if ($process) {
 		$process | Wait-Process
 	}
+	cd ..
 	cd ..
 	cd ..
 	cd ..
