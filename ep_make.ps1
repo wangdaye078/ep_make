@@ -403,10 +403,20 @@ echo "copy ep_taskbar.?.dll to folder $env:AppData\ExplorerPatcher\ep_make\repo\
 pause
 
 $content = Get-Content -Path ".\ep_setup\ep_setup.vcxproj" -Raw
-if ($content -match "((?s) *<ItemGroup>\r\n *<PackFile.*?</ItemGroup>)") { 
-  $content = $content.replace($matches[0], "")
-  $content = $content.replace("<MakeDir", $matches[0] + [Environment]::NewLine + "    <MakeDir")
-  Set-Content -Path ".\ep_setup\ep_setup.vcxproj" -Value $content
+if ($content -match "(?s)\r\n *<ItemGroup>\r\n *<PackFile.*?</ItemGroup>") {
+  $packfilegroup = $matches[0]
+  $content = $content.replace($packfilegroup, "")
+  [System.Collections.ArrayList]$packfilearray = $packfilegroup -split "`r`n"
+  $packfilearray.RemoveAt(0)
+  $spacematches = [regex]::Matches($packfilearray[0], "^ *")
+  if ($content -match ("(?s)\r\n" + $spacematches[0].Value + "( *)<MakeDir")) {
+    $packfilearray = foreach ($item in $packfilearray) {
+        $matches[1] + $item
+    }
+    $packfilegroup = "`r`n" + ($packfilearray -join "`r`n")
+    $content = $content.replace($matches[0], $packfilegroup + $matches[0])
+    Set-Content -Path ".\ep_setup\ep_setup.vcxproj" -Value $content
+  }
 }
 
 msbuild ExplorerPatcher.sln /property:Configuration=Release /property:Platform=amd64 /target:"clean;Build"
