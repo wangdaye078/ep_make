@@ -406,14 +406,8 @@ $content = Get-Content -Path ".\ep_setup\ep_setup.vcxproj" -Raw
 if ($content -match "(?s)\r\n *<ItemGroup>\r\n *<PackFile.*?</ItemGroup>") {
   $packfilegroup = $matches[0]
   $content = $content.replace($packfilegroup, "")
-  [System.Collections.ArrayList]$packfilearray = $packfilegroup -split "`r`n"
-  $packfilearray.RemoveAt(0)
-  $spacematches = [regex]::Matches($packfilearray[0], "^ *")
-  if ($content -match ("(?s)\r\n" + $spacematches[0].Value + "( *)<MakeDir")) {
-    $packfilearray = foreach ($item in $packfilearray) {
-        $matches[1] + $item
-    }
-    $packfilegroup = "`r`n" + ($packfilearray -join "`r`n")
+  if ($content -match ("(?s)\r\n" + $matches[1] + "( *)<MakeDir")) {
+    $packfilegroup = $packfilegroup.replace("`r`n", "`r`n" + $matches[1])
     $content = $content.replace($matches[0], $packfilegroup + $matches[0])
     Set-Content -Path ".\ep_setup\ep_setup.vcxproj" -Value $content
   }
