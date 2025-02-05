@@ -151,6 +151,7 @@ Write-Host "URL for ExplorerPatcher: $url_explorerpatcher"
 $EP_updatePreferStaging=0
 $EP_updateURL="https://github.com/valinet/ExplorerPatcher/releases/latest"
 $EP_updateURLStaging="https://api.github.com/repos/valinet/ExplorerPatcher/releases?per_page=1"
+$EP_commitsURL="http://api.github.com/repos/valinet/ExplorerPatcher/commits/master"
 $regKey = "HKCU:\SOFTWARE\ExplorerPatcher"
 if (Test-RegistryKeyValue -Path $regKey -Name "UpdatePreferStaging") {
 	$EP_updatePreferStaging = (Get-ItemProperty -Path $regKey -Name "UpdatePreferStaging").UpdatePreferStaging
@@ -175,7 +176,11 @@ if ($EP_updatePreferStaging -eq 1) {
 	$EP_commitId = (((curl.exe -L $EP_updateURL 2>$null | Out-String) -Split "up to and including")[1] -Split "/")[6].Substring(0, 7)
 }
 if ($Commit -ne "default") {
-	$EP_commitId = $Commit
+	if ($Commit -eq "last") {
+		$EP_commitId = (curl.exe -L $EP_commitsURL 2>$null | ConvertFrom-Json).sha.Substring(0, 7)
+	} else {
+		$EP_commitId = $Commit
+	}
 }
 Write-Host "Building for hash      : $EP_hashToUse"
 Write-Host "Commit to check out    : $EP_commitId"
