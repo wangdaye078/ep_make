@@ -122,7 +122,7 @@ $Host.UI.RawUI.WindowTitle = "ep_make: Initializing"
 # Set up some properties
 $EP_WinSDK_Short="22621"
 $EP_WinSDK_Long="10.0." + $EP_WinSDK_Short + ".0"
-$EP_OldPath=$env:PATH
+$env:OldPath=$env:PATH
 $ProgressPreference = 'SilentlyContinue' # Disable Invoke-WebRequest progress bar which slows down downloads tremendously
 $url_git="https://github.com/git-for-windows/git/releases/download/v2.45.0.windows.1/PortableGit-2.45.0-64-bit.7z.exe"
 $url_python="https://github.com/indygreg/python-build-standalone/releases/download/20240224/cpython-3.10.13+20240224-x86_64-pc-windows-msvc-static-install_only.tar.gz"
@@ -241,6 +241,7 @@ if (Test-Path -Path ".\nuget\nuget.exe") {
 Start-Sleep -Seconds 1
 
 $Host.UI.RawUI.WindowTitle = "ep_make: Acquiring portable-msvc"
+$portable_msvc_patched = 1
 if (Test-Path -Path ".\portable-msvc\portable-msvc.py") {
 	$Host.UI.RawUI.WindowTitle += ": skipped"
 } else {
@@ -249,40 +250,45 @@ if (Test-Path -Path ".\portable-msvc\portable-msvc.py") {
 	.\git\bin\git.exe -C portable-msvc reset --hard
 	.\git\bin\git.exe -C portable-msvc checkout $portable_msvc_commit
 	$Host.UI.RawUI.WindowTitle += ": ok"
+	$portable_msvc_patched = 0
 }
 Start-Sleep -Seconds 1
 
 $Host.UI.RawUI.WindowTitle = "ep_make: Patching portable-msvc"
-# Fix msiexec extraction getting stuck/not working with relative paths
-(gc -Encoding UTF8 .\portable-msvc\portable-msvc.py) -replace [regex]::Escape('OUTPUT = Path("msvc") '), 'OUTPUT = Path("msvc").resolve()' | Out-File -Encoding UTF8 .\portable-msvc\portable-msvc.py
-(gc -Encoding UTF8 .\portable-msvc\portable-msvc.py) -replace [regex]::Escape('DOWNLOADS = Path("downloads") '), 'DOWNLOADS = Path("downloads").resolve()' | Out-File -Encoding UTF8 .\portable-msvc\portable-msvc.py
+if (-not $portable_msvc_patched) {
+	# Fix msiexec extraction getting stuck/not working with relative paths
+	(gc -Encoding UTF8 .\portable-msvc\portable-msvc.py) -replace [regex]::Escape('OUTPUT = Path("msvc") '), 'OUTPUT = Path("msvc").resolve()' | Out-File -Encoding UTF8 .\portable-msvc\portable-msvc.py
+	(gc -Encoding UTF8 .\portable-msvc\portable-msvc.py) -replace [regex]::Escape('DOWNLOADS = Path("downloads") '), 'DOWNLOADS = Path("downloads").resolve()' | Out-File -Encoding UTF8 .\portable-msvc\portable-msvc.py
 
-# Implement "--target" parameter
-(gc -Encoding UTF8 .\portable-msvc\portable-msvc.py) -replace [regex]::Escape('args = ap.parse_args()'), "ap.add_argument(`"--target`", help=`"Target architecture`")`nargs =  ap.parse_args()`nTARGET = args.target or TARGET" | Out-File -Encoding UTF8 .\portable-msvc\portable-msvc.py
+	# Implement "--target" parameter
+	(gc -Encoding UTF8 .\portable-msvc\portable-msvc.py) -replace [regex]::Escape('args = ap.parse_args()'), "ap.add_argument(`"--target`", help=`"Target architecture`")`nargs =  ap.parse_args()`nTARGET = args.target or TARGET" | Out-File -Encoding UTF8 .\portable-msvc\portable-msvc.py
 
-# Grab some additional required packages (including vsdevcmd or not)
-#(gc -Encoding UTF8 .\portable-msvc\portable-msvc.py) -replace [regex]::Escape('#f"microsoft.vc.{msvc_ver}.crt.redist.x64.base",'), 'f"microsoft.build",f"microsoft.build.dependencies",f"microsoft.visualstudio.vc.msbuild.v170.base",f"microsoft.visualstudio.vc.msbuild.v170.{TARGET}",f"microsoft.visualstudio.vc.msbuild.v170.{TARGET}.v143",f"microsoft.visualstudio.vc.devcmd",f"microsoft.visualstudio.vc.vcvars",f"microsoft.visualcpp.tools.core.x86",f"microsoft.visualcpp.tools.host{HOST}.target{TARGET}",f"microsoft.visualcpp.tools.common.utils",f"microsoft.visualcpp.servicing.redist",f"microsoft.visualstudio.vsdevcmd.core.winsdk",' | Out-File -Encoding UTF8 .\portable-msvc\portable-msvc.py
-(gc -Encoding UTF8 .\portable-msvc\portable-msvc.py) -replace [regex]::Escape('#f"microsoft.vc.{msvc_ver}.crt.redist.x64.base",'), 'f"microsoft.build",f"microsoft.build.dependencies",f"microsoft.visualstudio.vc.msbuild.v170.base",f"microsoft.visualstudio.vc.msbuild.v170.{TARGET}",f"microsoft.visualstudio.vc.msbuild.v170.{TARGET}.v143",f"microsoft.visualcpp.tools.core.x86",' | Out-File -Encoding UTF8 .\portable-msvc\portable-msvc.py
+	# Grab some additional required packages (including vsdevcmd or not)
+	#(gc -Encoding UTF8 .\portable-msvc\portable-msvc.py) -replace [regex]::Escape('#f"microsoft.vc.{msvc_ver}.crt.redist.x64.base",'), 'f"microsoft.build",f"microsoft.build.dependencies",f"microsoft.visualstudio.vc.msbuild.v170.base",f"microsoft.visualstudio.vc.msbuild.v170.{TARGET}",f"microsoft.visualstudio.vc.msbuild.v170.{TARGET}.v143",f"microsoft.visualstudio.vc.devcmd",f"microsoft.visualstudio.vc.vcvars",f"microsoft.visualcpp.tools.core.x86",f"microsoft.visualcpp.tools.host{HOST}.target{TARGET}",f"microsoft.visualcpp.tools.common.utils",f"microsoft.visualcpp.servicing.redist",f"microsoft.visualstudio.vsdevcmd.core.winsdk",' | Out-File -Encoding UTF8 .\portable-msvc\portable-msvc.py
+	(gc -Encoding UTF8 .\portable-msvc\portable-msvc.py) -replace [regex]::Escape('#f"microsoft.vc.{msvc_ver}.crt.redist.x64.base",'), 'f"microsoft.build",f"microsoft.build.dependencies",f"microsoft.visualstudio.vc.msbuild.v170.base",f"microsoft.visualstudio.vc.msbuild.v170.{TARGET}",f"microsoft.visualstudio.vc.msbuild.v170.{TARGET}.v143",f"microsoft.visualcpp.tools.core.x86",' | Out-File -Encoding UTF8 .\portable-msvc\portable-msvc.py
 
-# Support neutral language
-(gc -Encoding UTF8 .\portable-msvc\portable-msvc.py) -replace [regex]::Escape('p = first(packages[pkg], lambda p: p.get("language") in (None, "en-US"))'), 'p = first(packages[pkg], lambda p: p.get("language") in (None, "en-US", "neutral"))' | Out-File -Encoding UTF8 .\portable-msvc\portable-msvc.py
+	# Support neutral language
+	(gc -Encoding UTF8 .\portable-msvc\portable-msvc.py) -replace [regex]::Escape('p = first(packages[pkg], lambda p: p.get("language") in (None, "en-US"))'), 'p = first(packages[pkg], lambda p: p.get("language") in (None, "en-US", "neutral"))' | Out-File -Encoding UTF8 .\portable-msvc\portable-msvc.py
 
-# Some packages have file name simply "package.vsix", make up some name for them
-(gc -Encoding UTF8 .\portable-msvc\portable-msvc.py) -replace [regex]::Escape('filename = payload["fileName"]'), 'filename = (pkg + ".vsix") if payload["fileName"] == "payload.vsix" else payload["fileName"]' | Out-File -Encoding UTF8 .\portable-msvc\portable-msvc.py
+	# Some packages have file name simply "package.vsix", make up some name for them
+	(gc -Encoding UTF8 .\portable-msvc\portable-msvc.py) -replace [regex]::Escape('filename = payload["fileName"]'), 'filename = (pkg + ".vsix") if payload["fileName"] == "payload.vsix" else payload["fileName"]' | Out-File -Encoding UTF8 .\portable-msvc\portable-msvc.py
 
-# Disable deletion of Common7 folder by portable-msvc
-#(gc -Encoding UTF8 .\portable-msvc\portable-msvc.py) -replace [regex]::Escape('### cleanup'), "### cleanup`n'''" | Out-File -Encoding UTF8 .\portable-msvc\portable-msvc.py
-(gc -Encoding UTF8 .\portable-msvc\portable-msvc.py) -replace [regex]::Escape('for arch in ["x86", "x64", "arm", "arm64"]:'), "'''`nfor arch in [`"x86`", `"x64`", `"arm64`", `"arm`"]:" | Out-File -Encoding UTF8 .\portable-msvc\portable-msvc.py
-(gc -Encoding UTF8 .\portable-msvc\portable-msvc.py) -replace [regex]::Escape('# executable that is collecting'), "'''`n# executable which is collecting" | Out-File -Encoding UTF8 .\portable-msvc\portable-msvc.py
+	# Disable deletion of Common7 folder by portable-msvc
+	#(gc -Encoding UTF8 .\portable-msvc\portable-msvc.py) -replace [regex]::Escape('### cleanup'), "### cleanup`n'''" | Out-File -Encoding UTF8 .\portable-msvc\portable-msvc.py
+	(gc -Encoding UTF8 .\portable-msvc\portable-msvc.py) -replace [regex]::Escape('for arch in ["x86", "x64", "arm", "arm64"]:'), "'''`nfor arch in [`"x86`", `"x64`", `"arm64`", `"arm`"]:" | Out-File -Encoding UTF8 .\portable-msvc\portable-msvc.py
+	(gc -Encoding UTF8 .\portable-msvc\portable-msvc.py) -replace [regex]::Escape('# executable that is collecting'), "'''`n# executable which is collecting" | Out-File -Encoding UTF8 .\portable-msvc\portable-msvc.py
 
-# Generate customized build script (or not)
-#(gc -Encoding UTF8 .\portable-msvc\portable-msvc.py) -replace [regex]::Escape('(OUTPUT / "setup.bat").write_text(SETUP)'), '(OUTPUT / f"setup_{TARGET}.bat").write_text(SETUP)' | Out-File -Encoding UTF8 .\portable-msvc\portable-msvc.py
-(gc -Encoding UTF8 .\portable-msvc\portable-msvc.py) -replace [regex]::Escape('(OUTPUT / "setup.bat").write_text(SETUP)'), '' | Out-File -Encoding UTF8 .\portable-msvc\portable-msvc.py
+	# Generate customized build script (or not)
+	#(gc -Encoding UTF8 .\portable-msvc\portable-msvc.py) -replace [regex]::Escape('(OUTPUT / "setup.bat").write_text(SETUP)'), '(OUTPUT / f"setup_{TARGET}.bat").write_text(SETUP)' | Out-File -Encoding UTF8 .\portable-msvc\portable-msvc.py
+	(gc -Encoding UTF8 .\portable-msvc\portable-msvc.py) -replace [regex]::Escape('(OUTPUT / "setup.bat").write_text(SETUP)'), '' | Out-File -Encoding UTF8 .\portable-msvc\portable-msvc.py
 
-# Only update MSIs if new versions were downloaded
-(gc -Encoding UTF8 .\portable-msvc\portable-msvc.py) -replace [regex]::Escape('OUTPUT.resolve()}"])'), 'OUTPUT.resolve()}"]) if total_download != 0 else None' | Out-File -Encoding UTF8 .\portable-msvc\portable-msvc.py
+	# Only update MSIs if new versions were downloaded
+	(gc -Encoding UTF8 .\portable-msvc\portable-msvc.py) -replace [regex]::Escape('OUTPUT.resolve()}"])'), 'OUTPUT.resolve()}"]) if total_download != 0 else None' | Out-File -Encoding UTF8 .\portable-msvc\portable-msvc.py
 
-$Host.UI.RawUI.WindowTitle += ": ok"
+	$Host.UI.RawUI.WindowTitle += ": ok"
+} else {
+	$Host.UI.RawUI.WindowTitle += ": skipped"
+}
 Start-Sleep -Seconds 1
 
 if (-not (Test-Path $env:AppData\ExplorerPatcher\ep_make\msvc\VC\Tools\MSVC\*\bin\Hostx64\x86)) {
@@ -333,6 +339,7 @@ Start-Sleep -Seconds 1
 $Host.UI.RawUI.WindowTitle = "ep_make: Preparing build environment"
 $env:Platform="x64"
 $env:EnterpriseWDK="True"
+$env:DisableRegistryUse=$null
 $env:VisualStudioVersion="17.0"
 $env:VSINSTALLDIR="$env:AppData\ExplorerPatcher\ep_make\msvc\"
 $env:VCToolsVersion=(Get-Content $env:AppData\ExplorerPatcher\ep_make\msvc\VC\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt -Raw).Trim()
@@ -342,7 +349,7 @@ $env:WindowsSDKDir="$env:AppData\ExplorerPatcher\ep_make\msvc\Windows Kits\10\"
 $env:WindowsSDK_IncludePath="$env:AppData\ExplorerPatcher\ep_make\msvc\VC\Tools\MSVC\$env:VCToolsVersion\include;;$env:AppData\ExplorerPatcher\ep_make\msvc\Windows Kits\10\Include\$EP_WinSDK_Long\um;;$env:AppData\ExplorerPatcher\ep_make\msvc\Windows Kits\10\Include\$EP_WinSDK_Long\ucrt;;$env:AppData\ExplorerPatcher\ep_make\msvc\Windows Kits\10\Include\$EP_WinSDK_Long\cppwinrt;;$env:AppData\ExplorerPatcher\ep_make\msvc\Windows Kits\10\Include\$EP_WinSDK_Long\shared;;$env:AppData\ExplorerPatcher\ep_make\msvc\Windows Kits\10\Include\$EP_WinSDK_Long\winrt"
 $env:WindowsSDK_LibraryPath_x86="$env:AppData\ExplorerPatcher\ep_make\msvc\Windows Kits\10\Lib\$EP_WinSDK_Long\um\x86;;$env:AppData\ExplorerPatcher\ep_make\msvc\Windows Kits\10\Lib\$EP_WinSDK_Long\ucrt\x86"
 $env:WindowsSDK_LibraryPath_x64="$env:AppData\ExplorerPatcher\ep_make\msvc\Windows Kits\10\Lib\$EP_WinSDK_Long\um\x64;;$env:AppData\ExplorerPatcher\ep_make\msvc\Windows Kits\10\Lib\$EP_WinSDK_Long\ucrt\x64"
-$EP_NewPath=$EP_OldPath+"$env:AppData\ExplorerPatcher\ep_make\msvc\Windows Kits\10\bin;;$env:AppData\ExplorerPatcher\ep_make\msvc\Windows Kits\10\bin\$EP_WinSDK_Long\x64;;$env:AppData\ExplorerPatcher\ep_make\msvc\VC\Tools\MSVC\$env:VCToolsVersion\bin\HostX64\x64;;$env:AppData\ExplorerPatcher\ep_make\msvc\MSBuild\Current\Bin\amd64;;$env:AppData\ExplorerPatcher\ep_make\msvc\Common7\IDE\;;$env:AppData\ExplorerPatcher\ep_make\msvc\Common7\Tools\;;"
+$EP_NewPath=$env:OldPath+"$env:AppData\ExplorerPatcher\ep_make\msvc\Windows Kits\10\bin;;$env:AppData\ExplorerPatcher\ep_make\msvc\Windows Kits\10\bin\$EP_WinSDK_Long\x64;;$env:AppData\ExplorerPatcher\ep_make\msvc\VC\Tools\MSVC\$env:VCToolsVersion\bin\HostX64\x64;;$env:AppData\ExplorerPatcher\ep_make\msvc\MSBuild\Current\Bin\amd64;;$env:AppData\ExplorerPatcher\ep_make\msvc\Common7\IDE\;;$env:AppData\ExplorerPatcher\ep_make\msvc\Common7\Tools\;;"
 $env:PATH=$EP_NewPath
 gci env:* | sort-object name
 $Host.UI.RawUI.WindowTitle += ": ok"
@@ -393,7 +400,7 @@ Start-Sleep -Seconds 1
 $Host.UI.RawUI.WindowTitle = "ep_make: Building ExplorerPatcher for x86"
 cd repo
 $env:Platform="x86"
-$env:PATH=$EP_OldPath+"$env:AppData\ExplorerPatcher\ep_make\msvc\Windows Kits\10\bin;;$env:AppData\ExplorerPatcher\ep_make\msvc\Windows Kits\10\bin\$EP_WinSDK_Long\x86;;$env:AppData\ExplorerPatcher\ep_make\msvc\VC\Tools\MSVC\$env:VCToolsVersion\bin\HostX64\x86;;$env:AppData\ExplorerPatcher\ep_make\msvc\MSBuild\Current\Bin\amd64;;$env:AppData\ExplorerPatcher\ep_make\msvc\Common7\IDE\;;$env:AppData\ExplorerPatcher\ep_make\msvc\Common7\Tools\;;"
+$env:PATH=$env:OldPath+"$env:AppData\ExplorerPatcher\ep_make\msvc\Windows Kits\10\bin;;$env:AppData\ExplorerPatcher\ep_make\msvc\Windows Kits\10\bin\$EP_WinSDK_Long\x86;;$env:AppData\ExplorerPatcher\ep_make\msvc\VC\Tools\MSVC\$env:VCToolsVersion\bin\HostX64\x86;;$env:AppData\ExplorerPatcher\ep_make\msvc\MSBuild\Current\Bin\amd64;;$env:AppData\ExplorerPatcher\ep_make\msvc\Common7\IDE\;;$env:AppData\ExplorerPatcher\ep_make\msvc\Common7\Tools\;;"
 msbuild ExplorerPatcher.sln /property:Configuration=Release /property:Platform=IA-32 /target:"clean;Build"
 $env:Platform="x64"
 $env:PATH=$EP_NewPath
@@ -423,6 +430,8 @@ cd ..
 $Host.UI.RawUI.WindowTitle += ": ok"
 Start-Sleep -Seconds 1
 
+$env:PATH=$env:OldPath
+$env:OldPath=$null
 if (Test-Path .\repo\build\Release\x64\ep_setup.exe) {
 	$Host.UI.RawUI.WindowTitle = "ep_make: Finalizing build"
 	if (-not (Test-Path $regKey)) {
